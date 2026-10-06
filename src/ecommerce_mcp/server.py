@@ -4,7 +4,7 @@ import sys
 
 from mcp.server.mcpserver import MCPServer
 
-from .database import get_connection
+from .database import get_connection, get_inventory_connection
 
 
 logging.basicConfig(
@@ -106,6 +106,63 @@ def get_product(sku: str) -> dict:
     finally:
         connection.close()
         logger.info("Database connection closed")
+
+@mcp.tool()
+def get_inventory(sku: str) -> dict:
+    """Get inventory information by SKU from the Inventory database."""
+
+    logger.info("get_inventory called with SKU: %s", sku)
+
+    connection = get_inventory_connection()
+
+    try:
+        logger.info("Inventory database connection established")
+
+        cursor = connection.cursor()
+
+        logger.info("Executing inventory query for SKU: %s", sku)
+
+        cursor.execute(
+            """
+            SELECT
+                sku,
+                quantity,
+                reserved_quantity,
+                quantity - reserved_quantity AS available_quantity
+            FROM inventory
+            WHERE sku = %s
+            """,
+            (sku,)
+        )
+
+        inventory = cursor.fetchone()
+
+        if inventory is None:
+            logger.warning("Inventory not found for SKU: %s", sku)
+
+            return {
+                "error": f"Inventory for SKU '{sku}' not found"
+            }
+
+        logger.info("Inventory found for SKU: %s", sku)
+
+        return {
+            "sku": inventory[0],
+            "quantity": inventory[1],
+            "reserved_quantity": inventory[2],
+            "available_quantity": inventory[3],
+        }
+
+    except Exception:
+        logger.exception(
+            "Error while getting inventory for SKU: %s",
+            sku
+        )
+        raise
+
+    finally:
+        connection.close()
+        logger.info("Inventory database connection closed")
 
 
 if __name__ == "__main__":
