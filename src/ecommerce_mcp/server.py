@@ -164,6 +164,74 @@ def get_inventory(sku: str) -> dict:
         connection.close()
         logger.info("Inventory database connection closed")
 
+@mcp.tool()
+def get_reservation(request_id: str) -> dict:
+    """Get reservation information by request ID from the Inventory database."""
+
+    logger.info("get_reservation called with request ID: %s", request_id)
+
+    connection = get_inventory_connection()
+
+    try:
+        logger.info("Inventory database connection established")
+
+        cursor = connection.cursor()
+
+        logger.info(
+            "Executing reservation query for request ID: %s",
+            request_id
+        )
+
+        cursor.execute(
+            """
+            SELECT
+                request_id,
+                status,
+                items,
+                created_at,
+                updated_at
+            FROM reservation
+            WHERE request_id = %s
+            """,
+            (request_id,)
+        )
+
+        reservation = cursor.fetchone()
+
+        if reservation is None:
+            logger.warning(
+                "Reservation not found for request ID: %s",
+                request_id
+            )
+
+            return {
+                "error": f"Reservation with request ID '{request_id}' not found"
+            }
+
+        logger.info(
+            "Reservation found for request ID: %s",
+            request_id
+        )
+
+        return {
+            "request_id": str(reservation[0]),
+            "status": reservation[1],
+            "items": reservation[2],
+            "created_at": reservation[3].isoformat(),
+            "updated_at": reservation[4].isoformat(),
+        }
+
+    except Exception:
+        logger.exception(
+            "Error while getting reservation for request ID: %s",
+            request_id
+        )
+        raise
+
+    finally:
+        connection.close()
+        logger.info("Inventory database connection closed")
+
 
 if __name__ == "__main__":
     logger.info("Starting ecommerce MCP server")
