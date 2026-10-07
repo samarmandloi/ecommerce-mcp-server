@@ -169,6 +169,175 @@ def get_inventory(sku: str) -> dict:
         connection.close()
         logger.info("Inventory database connection closed")
 
+
+@mcp.tool()
+def find_data_mismatches(sku: str) -> dict:
+    """Compare product and inventory data for a SKU."""
+
+    logger.info("find_data_mismatches called with SKU: %s", sku)
+
+    product_connection = None
+    inventory_connection = None
+
+    try:
+        product_connection = get_connection()
+        inventory_connection = get_inventory_connection()
+        # Get product quantity
+        product_cursor = product_connection.cursor()
+
+        logger.info(
+            "Checking product database for SKU: %s",
+            sku
+        )
+
+        product_cursor.execute(
+            """
+            SELECT
+                sku,
+                quantity
+            FROM variants
+            WHERE sku = %s
+            """,
+            (sku,)
+        )
+
+        product = product_cursor.fetchone()
+
+        # Get inventory quantity
+        inventory_cursor = inventory_connection.cursor()
+
+        logger.info(
+            "Checking inventory database for SKU: %s",
+            sku
+        )
+
+        inventory_cursor.execute(
+            """
+            SELECT
+                sku,
+                quantity,
+                reserved_quantity
+            FROM inventory
+            WHERE sku = %s
+            """,
+            (sku,)
+        )
+
+        inventory = inventory_cursor.fetchone()
+
+        # Product missing
+        if product is None and inventory is not None:
+            logger.warning(
+                "SKU %s exists in inventory but is missing from product database",
+                sku
+            )
+
+            return {
+                "sku": sku,
+                "mismatch": True,
+                "type": "MISSING_IN_PRODUCT",
+                "product": None,
+                "inventory": {
+                    "quantity": inventory[1],
+                    "reserved_quantity": inventory[2],
+                },
+            }
+
+        # Inventory missing
+        if product is not None and inventory is None:
+            logger.warning(
+                "SKU %s exists in product database but is missing from inventory database",
+                sku
+            )
+
+            return {
+                "sku": sku,
+                "mismatch": True,
+                "type": "MISSING_IN_INVENTORY",
+                "product": {
+                    "quantity": product[1],
+                },
+                "inventory": None,
+            }
+
+        # Both missing
+        if product is None and inventory is None:
+            logger.warning(
+                "SKU %s does not exist in either database",
+                sku
+            )
+
+            return {
+                "sku": sku,
+                "mismatch": False,
+                "type": "NOT_FOUND",
+                "product": None,
+                "inventory": None,
+            }
+
+        # Both exist - compare quantities
+        product_quantity = product[1]
+        inventory_quantity = inventory[1]
+
+        if product_quantity != inventory_quantity:
+            logger.warning(
+                "Quantity mismatch found for SKU %s: product=%s, inventory=%s",
+                sku,
+                product_quantity,
+                inventory_quantity
+            )
+
+            return {
+                "sku": sku,
+                "mismatch": True,
+                "type": "QUANTITY_MISMATCH",
+                "product": {
+                    "quantity": product_quantity,
+                },
+                "inventory": {
+                    "quantity": inventory_quantity,
+                    "reserved_quantity": inventory[2],
+                },
+            }
+
+        logger.info(
+            "No data mismatch found for SKU: %s",
+            sku
+        )
+
+        return {
+            "sku": sku,
+            "mismatch": False,
+            "type": "MATCH",
+            "product": {
+                "quantity": product_quantity,
+            },
+            "inventory": {
+                "quantity": inventory_quantity,
+                "reserved_quantity": inventory[2],
+            },
+        }
+
+    except Exception:
+        logger.exception(
+            "Error while comparing product and inventory data for SKU: %s",
+            sku
+        )
+        raise
+
+    finally:
+        if product_connection is not None:
+            product_connection.close()
+
+        if inventory_connection is not None:
+            inventory_connection.close()
+
+        logger.info(
+            "Database connections closed for SKU: %s",
+            sku
+        )
+
+
 @mcp.tool()
 def get_reservation(request_id: str) -> dict:
     """Get reservation information by request ID from the Inventory database."""
@@ -307,7 +476,3 @@ def search_logs(service: str, query: str) -> dict:
         "match_count": len(matches),
         "matches": matches,
     }
-
-if __name__ == "__main__":
-    logger.info("Starting ecommerce MCP server")
-    mcp.run()
