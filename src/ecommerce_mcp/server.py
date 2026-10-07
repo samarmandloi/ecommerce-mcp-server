@@ -6,6 +6,7 @@ from pathlib import Path
 from mcp.server.mcpserver import MCPServer
 
 from .database import get_connection, get_inventory_connection
+from .product_service import create_product as create_product_api
 
 
 logging.basicConfig(
@@ -46,6 +47,36 @@ def check_database_environment() -> dict:
         "user": os.getenv("PRODUCT_DB_USER"),
         "password_set": bool(os.getenv("PRODUCT_DB_PASSWORD")),
     }
+
+
+@mcp.tool()
+def create_product(
+    brand_id: str,
+    name: str,
+    price: float,
+    description: str | None = None,
+    image_url: str | None = None,
+    enabled: bool | None = None,
+) -> dict:
+    """Create a product through the Product Service API."""
+
+    logger.info("create_product called for product: %s", name)
+
+    payload = {
+        "brandId": brand_id,
+        "name": name,
+        "price": price,
+        "description": description,
+        "imageUrl": image_url,
+        "enabled": enabled,
+    }
+
+    logger.info(
+        "Sending create product request to Product Service for product: %s",
+        name,
+    )
+
+    return create_product_api(payload)
 
 
 @mcp.tool()
