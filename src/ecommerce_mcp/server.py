@@ -24,6 +24,7 @@ SERVICE_LOG_DIRS = {
     "inventory-service": Path.home() / "IdeaProjects/ecommerce/inventory-service/logs",
 }
 
+
 @mcp.tool()
 def hello(name: str) -> str:
     """Say hello to a user."""
@@ -31,7 +32,6 @@ def hello(name: str) -> str:
     logger.info("hello called with name: %s", name)
 
     return f"Hello {name}"
-
 
 @mcp.tool()
 def check_database_environment() -> dict:
