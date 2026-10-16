@@ -1,0 +1,9 @@
+[project]
+name = "ecommerce-mcp-server"
+version = "0.1.0"
+description = "MCP server for accessing e-commerce product and inventory data"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp>=2.3.0",
+    "psycopg[binary]>=3.3.0"
+]
