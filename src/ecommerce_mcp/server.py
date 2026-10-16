@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+from pathlib import Path
 
 from mcp.server.mcpserver import MCPServer
 
@@ -17,6 +18,20 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 mcp = MCPServer("ecommerce-mcp-server")
+
+SERVICE_LOG_DIRS = {
+    "product-service": Path.home() / "IdeaProjects/ecommerce/product-service/logs",
+    "inventory-service": Path.home() / "IdeaProjects/ecommerce/inventory-service/logs",
+}
+
+
+@mcp.tool()
+def hello(name: str) -> str:
+    """Say hello to a user."""
+
+    logger.info("hello called with name: %s", name)
+
+    return f"Hello {name}"
 
 @mcp.tool()
 def check_database_environment() -> dict:
@@ -222,6 +237,94 @@ def get_reservation(request_id: str) -> dict:
         connection.close()
         logger.info("Inventory database connection closed")
 
+@mcp.tool()
+def search_logs(service: str, query: str) -> dict:
+    """Search application logs for a service."""
+
+    logger.info(
+        "search_logs called with service=%s, query=%s",
+        service,
+        query
+    )
+
+    if service not in SERVICE_LOG_DIRS:
+        logger.warning("Unsupported service requested: %s", service)
+
+        return {
+            "error": (
+                f"Unsupported service '{service}'. "
+                f"Supported services: {list(SERVICE_LOG_DIRS.keys())}"
+            )
+        }
+
+    if not query.strip():
+        return {
+            "error": "Log search query cannot be empty"
+        }
+
+    log_directory = SERVICE_LOG_DIRS[service]
+
+    if not log_directory.exists():
+        logger.warning(
+            "Log directory does not exist for service %s: %s",
+            service,
+            log_directory
+        )
+
+        return {
+            "error": f"Log directory not found for service '{service}'"
+        }
+
+    matches = []
+    max_files_to_search = 10
+    max_results = 100
+
+    log_files = sorted(
+        log_directory.rglob("*.log"),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )[:max_files_to_search]
+
+    for log_file in log_files:
+        try:
+            with log_file.open(
+                "r",
+                encoding="utf-8",
+                errors="replace",
+            ) as file:
+                for line_number, line in enumerate(file, start=1):
+                    if query.casefold() in line.casefold():
+                        matches.append({
+                            "file": str(log_file.relative_to(log_directory)),
+                            "line": line_number,
+                            "message": line.rstrip(),
+                        })
+
+                        if len(matches) >= max_results:
+                            break
+
+        except OSError:
+            logger.exception(
+                "Error while reading log file: %s",
+                log_file,
+            )
+
+        if len(matches) >= max_results:
+            break
+
+    logger.info(
+        "Log search completed for service=%s, query=%s, matches=%d",
+        service,
+        query,
+        len(matches),
+    )
+
+    return {
+        "service": service,
+        "query": query,
+        "match_count": len(matches),
+        "matches": matches,
+    }
 
 if __name__ == "__main__":
     logger.info("Starting ecommerce MCP server")
