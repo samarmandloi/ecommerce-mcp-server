@@ -276,29 +276,47 @@ def search_logs(service: str, query: str) -> dict:
         }
 
     matches = []
+    max_files_to_search = 10
+    max_results = 100
 
-    for log_file in sorted(log_directory.rglob("*.log")):
+    log_files = sorted(
+        log_directory.rglob("*.log"),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )[:max_files_to_search]
+
+    for log_file in log_files:
         try:
-            with log_file.open("r", encoding="utf-8", errors="replace") as file:
+            with log_file.open(
+                "r",
+                encoding="utf-8",
+                errors="replace",
+            ) as file:
                 for line_number, line in enumerate(file, start=1):
-                    if query.lower() in line.lower():
+                    if query.casefold() in line.casefold():
                         matches.append({
                             "file": str(log_file.relative_to(log_directory)),
                             "line": line_number,
                             "message": line.rstrip(),
                         })
 
+                        if len(matches) >= max_results:
+                            break
+
         except OSError:
             logger.exception(
                 "Error while reading log file: %s",
-                log_file
+                log_file,
             )
+
+        if len(matches) >= max_results:
+            break
 
     logger.info(
         "Log search completed for service=%s, query=%s, matches=%d",
         service,
         query,
-        len(matches)
+        len(matches),
     )
 
     return {
