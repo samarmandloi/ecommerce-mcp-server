@@ -18,16 +18,6 @@ logger = logging.getLogger(__name__)
 
 mcp = MCPServer("ecommerce-mcp-server")
 
-
-@mcp.tool()
-def hello(name: str) -> str:
-    """Say hello to a user."""
-
-    logger.info("hello called with name: %s", name)
-
-    return f"Hello {name}"
-
-
 @mcp.tool()
 def check_database_environment() -> dict:
     """Check whether database environment variables are available."""
